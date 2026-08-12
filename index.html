@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#04050a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="黑洞大作战">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="assets/icon-512.png">
+<link rel="apple-touch-icon" href="assets/icon-180.png">
+<title>黑洞大作战 · 宗主版</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  html,body { width:100%; height:100%; overflow:hidden; background:#10141f;
+              font-family:'Microsoft YaHei','PingFang SC',system-ui,sans-serif; }
+  canvas { display:block; width:100vw; height:100vh; height:100dvh; cursor:default; touch-action:none;
+           -webkit-user-select:none; user-select:none; }
+
+  /* ========== 虚拟方向盘（手机） ========== */
+  #joy { position:fixed; left:26px; bottom:calc(26px + env(safe-area-inset-bottom)); width:150px; height:150px; border-radius:50%;
+         display:none; z-index:6; touch-action:none; pointer-events:auto;
+         background:radial-gradient(circle, rgba(255,255,255,0.12), rgba(255,255,255,0.04) 70%);
+         border:2px solid rgba(255,255,255,0.30);
+         box-shadow:0 4px 26px rgba(0,0,0,0.4), inset 0 0 24px rgba(0,0,0,0.25); }
+  #joyRing { position:absolute; inset:7px; border-radius:50%;
+             background:repeating-conic-gradient(rgba(255,255,255,0.20) 0deg 9deg, transparent 9deg 36deg);
+             -webkit-mask:radial-gradient(circle, transparent 60%, #000 62%);
+             mask:radial-gradient(circle, transparent 60%, #000 62%);
+             animation:joySpin 6s linear infinite; }
+  #joyRing::after { content:''; position:absolute; inset:0; border-radius:50%;
+                    background:repeating-conic-gradient(rgba(255,255,255,0.12) 0deg 60deg, transparent 60deg 120deg);
+                    -webkit-mask:radial-gradient(circle, transparent 78%, #000 80%);
+                    mask:radial-gradient(circle, transparent 78%, #000 80%);
+                    animation:joySpin 3s linear infinite reverse; }
+  #joyKnob { position:absolute; left:50%; top:50%; width:56px; height:56px; margin:-28px 0 0 -28px;
+             border-radius:50%; border:1px solid rgba(255,255,255,0.45);
+             background:radial-gradient(circle at 35% 30%, rgba(255,255,255,0.55), rgba(255,255,255,0.14) 55%, rgba(255,255,255,0.06));
+             box-shadow:0 4px 16px rgba(0,0,0,0.5); transform:translate(0,0); will-change:transform; }
+  #joyKnob::after { content:'✚'; position:absolute; inset:0; display:flex; align-items:center; justify-content:center;
+                    font-size:20px; color:rgba(255,255,255,0.75); }
+  @keyframes joySpin { to { transform:rotate(360deg); } }
+
+  /* ========== HUD ========== */
+  #hud { position:fixed; inset:0; pointer-events:none; z-index:5; color:#fff; }
+  .panel { background:linear-gradient(160deg, rgba(28,32,52,0.88), rgba(16,18,32,0.82));
+           border:1px solid rgba(255,255,255,0.16); border-radius:14px; padding:10px 16px;
+           backdrop-filter:blur(4px); box-shadow:0 6px 20px rgba(0,0,0,0.35); }
+  #stats { position:absolute; top:12px; left:12px; font-size:13px; line-height:1.8; min-width:130px; }
+  #stats .k { color:#8ea2c8; letter-spacing:1px; font-size:11px; }
+  #stats b { font-size:17px; color:#ffd76a; }
+  #timeRow b { color:#8ef0ff; }
+  #pauseBtn { position:absolute; top:12px; right:12px; pointer-events:auto; cursor:pointer;
+              border:1px solid rgba(255,255,255,0.25); border-radius:999px; padding:8px 16px;
+              background:rgba(20,24,40,0.7); color:#fff; font-size:13px; font-weight:bold;
+              letter-spacing:1px; transition:transform .12s; }
+  #pauseBtn:hover { transform:scale(1.06); background:rgba(255,215,106,0.9); color:#1a1408; }
+  #rank { position:absolute; bottom:calc(12px + env(safe-area-inset-bottom)); left:12px; right:12px; display:flex; gap:8px;
+          justify-content:center; flex-wrap:wrap; }
+  .rchip { font-size:12px; padding:4px 10px; border-radius:999px; background:rgba(10,14,25,0.72);
+           border:1px solid rgba(255,255,255,0.14); display:flex; align-items:center; gap:6px; }
+  .rchip .dot { width:9px; height:9px; border-radius:50%; }
+  .rchip.you { border-color:#ffd76a; color:#ffd76a; font-weight:bold; }
+  .rchip .bar { width:44px; height:6px; background:rgba(255,255,255,0.18); border-radius:3px; overflow:hidden; }
+  .rchip .bar i { display:block; height:100%; border-radius:3px; }
+  #hint { position:fixed; bottom:calc(64px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%); z-index:6; color:#dfe8ff;
+          font-size:13px; background:rgba(10,14,25,0.6); padding:6px 16px; border-radius:999px;
+          pointer-events:none; transition:opacity .6s; }
+
+  /* ========== 遮罩通用 ========== */
+  .overlay { position:fixed; inset:0; z-index:10; display:flex; align-items:center; justify-content:center;
+             background:radial-gradient(ellipse at center, rgba(20,26,48,0.55), rgba(6,8,16,0.78)); }
+  /* 主菜单专用：纯黑不透明背景（v=99.4 不透出刚玩完的游戏画面），照片墙浮在纯黑上 */
+  #menu { background:#04050a; }
+  #driftWall { position:absolute; inset:0; z-index:0; }
+  .card { position:relative; z-index:1; text-align:center; color:#fff; max-width:480px; width:min(90vw,480px);
+          padding:28px 34px;
+          background:linear-gradient(160deg, rgba(18,22,40,0.72), rgba(10,12,24,0.66));
+          border:1px solid rgba(255,255,255,0.12); border-radius:22px;
+          backdrop-filter:blur(6px); box-shadow:0 16px 60px rgba(0,0,0,0.5); }
+  /* DriftWall hover 抬升（原生实现补充；v=99.1 默认态用 CSS 类而非内联，hover 才能覆盖） */
+  .dw-inner { transform:translateZ(0); opacity:var(--dw-dim, 0.8); }
+  .dw-inner > div:last-child { opacity:0.18; }
+  .dw-tile.is-active .dw-inner { opacity:1; transform:translateZ(var(--dw-lift, 64px));
+    box-shadow:0 24px 60px -18px rgba(0,0,0,0.7); }
+  .dw-tile.is-active img { filter:saturate(1.05); }
+  .dw-tile.is-active .dw-inner > div:last-child { opacity:0; }
+  .dw-tile:focus-visible { outline:none; }
+  .dw-tile:focus-visible .dw-inner { opacity:1; transform:translateZ(var(--dw-lift, 64px));
+    box-shadow:0 24px 60px -18px rgba(0,0,0,0.7), 0 0 0 2px rgba(255,255,255,0.9); }
+  .card h1 { font-size:46px; margin-bottom:2px; letter-spacing:5px;
+             background:linear-gradient(90deg,#ffd76a,#ff9d5c,#ff6a8a);
+             -webkit-background-clip:text; background-clip:text; color:transparent;
+             text-shadow:0 4px 30px rgba(255,180,90,0.25); }
+  .card h2 { font-size:32px; margin-bottom:18px; letter-spacing:2px; }
+  .card .sub { color:#9fb3d8; font-size:14px; margin-bottom:20px; }
+  .btn { pointer-events:auto; cursor:pointer; border:none; display:block; width:100%; margin:10px auto;
+         font-size:18px; font-weight:bold; color:#1a1408; padding:13px 30px; border-radius:999px;
+         background:linear-gradient(90deg,#ffd76a,#ffb45c); box-shadow:0 6px 22px rgba(255,190,90,0.35);
+         transition:transform .12s, box-shadow .12s; }
+  .btn:hover { transform:scale(1.04); box-shadow:0 8px 28px rgba(255,190,90,0.5); }
+  /* 主菜单大按钮：开始游戏，遁入依门 */
+  .btn.big { font-size:24px; padding:20px 44px; letter-spacing:3px; margin:8px auto 16px;
+             background:linear-gradient(90deg,#ffd76a,#ff9d5c);
+             box-shadow:0 10px 36px rgba(255,190,90,0.5), inset 0 -3px 0 rgba(120,60,0,0.25);
+             text-shadow:0 1px 2px rgba(120,60,0,0.25); }
+  .btn.ghost { background:rgba(255,255,255,0.08); color:#cdd8f0; box-shadow:none; border:1px solid rgba(255,255,255,0.2); }
+  .btn.ghost:hover { background:rgba(255,255,255,0.16); }
+  .rules { text-align:left; font-size:12.5px; color:#b9c6e2; line-height:1.9; background:rgba(255,255,255,0.05);
+           border-radius:12px; padding:12px 16px; margin-top:18px; }
+  .tip { color:#9fb3d8; font-size:13px; margin-top:8px; }
+  .hidden { display:none !important; }
+
+  /* 结算排行榜 */
+  #resultBoard { margin:6px auto 10px; width:100%; }
+  #resultBoard .row { display:flex; align-items:center; justify-content:space-between;
+                      background:rgba(255,255,255,0.06); border-radius:10px; padding:10px 16px;
+                      margin:6px 0; font-size:17px; color:#dfe8ff; }
+  #resultBoard .row.you { background:rgba(255,215,106,0.18); border:1px solid rgba(255,215,106,0.5); color:#ffd76a; font-weight:bold; }
+  #resultBoard .row .sc { font-size:20px; font-weight:bold; color:#8ef0ff; }
+  #resultBoard .youTag { color:#ffd76a; font-size:12px; border:1px solid #ffd76a; border-radius:6px; padding:1px 6px; margin-left:6px; }
+  .winBig { font-size:20px; color:#ffd76a; padding:14px 0; }
+  #resultStats { font-size:15px; color:#b9c6e2; margin-bottom:6px; line-height:1.9; }
+
+  /* ========== 地图选择手风琴（v=100，React Bits AccordionGallery 原生移植） ========== */
+  #mapSelect .card { max-width:1000px; width:min(94vw,1000px); padding:20px 24px 18px; }
+  #mapSelect h2 { font-size:26px; margin-bottom:2px; letter-spacing:2px; }
+  .ag { display:flex; flex-direction:row; gap:10px; width:100%; margin:14px 0 12px;
+        perspective:1400px; perspective-origin:50% 50%; }
+  .ag--v { flex-direction:column; }
+  .ag-panel { position:relative; flex:1 1 0; min-width:0; min-height:0; overflow:hidden;
+              border-radius:16px; cursor:pointer; display:block; text-decoration:none; outline:none;
+              background:#0a0713; box-shadow:0 10px 30px -18px rgba(0,0,0,.8);
+              transition:flex-grow .6s cubic-bezier(.22,.61,.36,1), box-shadow .35s, filter .6s;
+              will-change:flex-grow; -webkit-tap-highlight-color:transparent; }
+  .ag-panel:focus-visible { box-shadow:0 0 0 2px #ffd76a, 0 10px 30px -18px rgba(0,0,0,.8); }
+  .ag-panel.is-active { flex-grow:4.34; box-shadow:0 0 0 2px rgba(255,215,106,.55), 0 10px 30px -18px rgba(0,0,0,.8); }
+  .ag-frame { position:absolute; inset:0; overflow:hidden; border-radius:inherit; }
+  .ag-media { position:absolute; top:50%; left:50%; width:130%; height:100%;
+              transform:translate(-50%,-50%) translateX(0);
+              transition:transform .6s cubic-bezier(.22,.61,.36,1); }
+  .ag-media img { width:100%; height:100%; object-fit:cover; display:block;
+                  filter:grayscale(1) brightness(.72); transition:filter .6s; user-select:none; -webkit-user-drag:none; }
+  .ag-panel.is-active .ag-media img { filter:grayscale(0) brightness(1.02); }
+  .ag-ovl { position:absolute; inset:0; pointer-events:none;
+            background:linear-gradient(180deg, transparent 45%, rgba(6,0,16,.78) 100%), rgba(6,0,16,.42); }
+  .ag-panel.is-active .ag-ovl { background:linear-gradient(180deg, transparent 45%, rgba(6,0,16,.78) 100%); }
+  .ag-cap { position:absolute; left:18px; bottom:16px; right:18px; display:flex; align-items:center; gap:12px;
+            pointer-events:none; z-index:2; opacity:0; transform:translateX(-14px);
+            transition:opacity .45s ease, transform .45s ease; }
+  .ag-panel.is-active .ag-cap { opacity:1; transform:none; }
+  .ag-bar { flex:0 0 auto; width:3px; height:26px; border-radius:3px; background:#ffd76a;
+            box-shadow:0 0 12px rgba(255,215,106,.6); }
+  .ag-text { color:#fff; font-weight:700; font-size:clamp(1rem,1.5vw,1.35rem); letter-spacing:.02em;
+             white-space:nowrap; overflow:hidden; text-overflow:ellipsis; text-shadow:0 2px 14px rgba(0,0,0,.6); }
+  @media (max-width:640px){
+    .ag { flex-direction:column; perspective:none; height:auto !important; }
+    .ag-panel { flex:none; height:74px; transition:height .5s cubic-bezier(.22,.61,.36,1); }
+    .ag-panel.is-active { height:210px; }
+    .ag-media { width:100%; }
+    /* ===== 手机全局适配（安卓/鸿蒙/苹果，v=104.5） ===== */
+    #joy { left:18px; width:128px; height:128px; }
+    #stats { top:10px; left:10px; min-width:112px; padding:8px 12px; font-size:12px; }
+    #stats b { font-size:15px; }
+    #pauseBtn { top:10px; right:10px; padding:7px 13px; font-size:12px; }
+    #hint { font-size:12px; padding:5px 13px; white-space:nowrap; }
+    .card { padding:20px 18px; border-radius:18px; }
+    .card h1 { font-size:34px; letter-spacing:3px; }
+    .card h2 { font-size:26px; }
+    .card .sub { font-size:13px; margin-bottom:14px; }
+    .btn { font-size:17px; padding:12px 24px; }
+    .btn.big { font-size:20px; padding:16px 34px; letter-spacing:2px; }
+    .rules { font-size:11.5px; padding:10px 12px; margin-top:12px; }
+    .winBig { font-size:17px; }
+    #resultBoard .row { font-size:15px; padding:8px 12px; }
+    #resultStats { font-size:13px; }
+  }
+  /* 横屏手机（高度矮）：摇杆缩小、HUD 紧凑 */
+  @media (max-height:480px){
+    #joy { width:104px; height:104px; bottom:calc(12px + env(safe-area-inset-bottom)); }
+    #stats { top:8px; left:8px; }
+    #hint { bottom:calc(10px + env(safe-area-inset-bottom)); }
+    #rank { bottom:calc(8px + env(safe-area-inset-bottom)); }
+  }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+
+<div id="hud">
+  <div class="panel" id="stats">
+    <div class="statRow"><span class="k">SCORE</span> <b id="scoreVal">0</b></div>
+    <div class="statRow"><span class="k">SIZE</span> <b id="sizeVal">30</b></div>
+    <div class="statRow" id="progRow"><span class="k">PROGRESS</span> <b id="progVal">—</b></div>
+    <div class="statRow" id="timeRow"><span class="k">TIME</span> <b id="timerVal">120</b></div>
+  </div>
+  <button id="pauseBtn">⏸ PAUSE</button>
+  <div id="rank"></div>
+</div>
+<div id="hint">🖱 鼠标 / WASD 控制黑洞</div>
+<div id="joy"><div id="joyRing"></div><div id="joyKnob"></div></div>
+
+<!-- ===== 主菜单（背景 = DriftWall 照片墙） ===== -->
+<div id="menu" class="overlay">
+  <div id="driftWall"></div>
+  <div class="card">
+    <h1>BLACK HOLE</h1>
+    <div class="sub">黑洞大作战 · 宗主版</div>
+    <button class="btn big" id="bigStartBtn">开始游戏，遁入依门</button>
+    <div id="modePick" class="hidden">
+      <button class="btn menuBtn" data-mode="single">🕹 单人吞噬</button>
+      <button class="btn menuBtn" data-mode="arena">⚔️ 黑洞竞技</button>
+    </div>
+    <div class="rules">
+      🖥 电脑 WASD 或者手机方向盘 控制黑洞<br>
+      😋 吞噬比你小的东西就能变大、得分<br>
+      🏙 单人模式：吞光整座城市即可获胜<br>
+      ⚔️ 竞技模式：120 秒内得分最高者获胜
+    </div>
+  </div>
+</div>
+
+<!-- ===== 暂停 ===== -->
+<div id="pause" class="overlay hidden">
+  <div class="card">
+    <h2>⏸ GAME PAUSED</h2>
+    <button class="btn" id="resumeBtn">▶️ 继续</button>
+    <button class="btn" id="restartBtn">🔄 重新开始</button>
+    <button class="btn ghost" id="exitMenuBtn">🏠 返回主菜单</button>
+  </div>
+</div>
+
+<!-- ===== 结算 ===== -->
+<div id="result" class="overlay hidden">
+  <div class="card">
+    <h2 id="resultTitle"></h2>
+    <div id="resultBoard"></div>
+    <div id="resultStats"></div>
+    <button class="btn" id="againBtn">🔄 再来一局</button>
+    <button class="btn ghost" id="resultMenuBtn">🏠 返回主菜单</button>
+  </div>
+</div>
+
+<!-- ===== 地图选择（v=100：AccordionGallery 手风琴画廊） ===== -->
+<div id="mapSelect" class="overlay hidden">
+  <div class="card">
+    <h2>🗺 选择地图</h2>
+    <div class="sub" id="mapSelectSub">鼠标移到地图上预览 · 点击展开的地图开始游戏</div>
+    <div id="mapAccordion"></div>
+    <button class="btn ghost" id="mapBackBtn">🏠 返回主菜单</button>
+  </div>
+</div>
+
+<script src="js/data.js"></script>
+<script src="js/driftwall.js"></script>
+<script src="js/game.js"></script>
+<script src="js/accordion.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
