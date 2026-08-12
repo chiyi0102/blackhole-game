@@ -1,0 +1,24 @@
+# 依赖 / 构建缓存
+node_modules/
+.vite/
+dist/
+
+# 开发/调试残留
+dbg*
+hshot*
+hsnap*
+p1c*
+mobile.png
+panel.png
+t_*.html
+*.log
+
+# 本地素材与生成物(不部署)
+.hermes/
+assets_ref/
+插图/
+设计预览/
+
+# 系统
+.DS_Store
+Thumbs.db
